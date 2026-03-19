@@ -1,5 +1,4 @@
 const axios = require("axios");
-require("dotenv").config({ path: "./weather-bot/.env" });
 
 async function getWeather(city) {
     const apiKey = process.env.WEATHER_API_KEY;
