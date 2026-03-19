@@ -3,7 +3,12 @@ const TelegramBot = require("node-telegram-bot-api");
 const memoize = require("./weather-bot/utils/memoize");
 const getWeather = require("./weather-bot/services/weatherService");
 
-const token = process.env.TELEGRAM_BOT_TOKEN || "8686955126:AAFFs5-N6CJ4YDH8mCnCa0IR_08D4HgIEa4";
+const token = process.env.TELEGRAM_BOT_TOKEN;
+
+if (!token) {
+    throw new Error("TELEGRAM_BOT_TOKEN is not set");
+}
+
 const bot = new TelegramBot(token, { polling: true });
 const cachedWeather = memoize(getWeather, 1800000);
 
