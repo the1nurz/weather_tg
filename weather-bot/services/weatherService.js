@@ -1,12 +1,14 @@
 const axios = require("axios");
-require("dotenv").config();
+require("dotenv").config({ path: "./weather-bot/.env" });
 
 async function getWeather(city) {
     const apiKey = process.env.WEATHER_API_KEY;
 
-    const url =
-        `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}&units=metric`;
+    if (!apiKey) {
+        throw new Error("WEATHER_API_KEY is not set");
+    }
 
+    const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=ua`;
     const res = await axios.get(url);
 
     return {
@@ -16,7 +18,3 @@ async function getWeather(city) {
 }
 
 module.exports = getWeather;
-const memoize = require("./utils/memoize");
-const getWeather = require("./services/weatherService");
-
-const cachedWeather = memoize(getWeather, 1800000);
