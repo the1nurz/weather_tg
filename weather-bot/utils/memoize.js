@@ -14,12 +14,14 @@ function memoize(fn, options = {}) {
         : null;
 
     const cache = new Map();
+    const getTimestamp = (value) => value instanceof Date ? value.getTime() : value;
+    const getNow = () => new Date();
 
     function removeExpired() {
-        const now = Date.now();
+        const now = getNow().getTime();
 
         for (const [key, entry] of cache.entries()) {
-            if (now - entry.time >= ttl) {
+            if (now - getTimestamp(entry.time) >= ttl) {
                 cache.delete(key);
             }
         }
@@ -49,14 +51,17 @@ function memoize(fn, options = {}) {
             const [key, entry] = entries[i];
 
             if (policy === "lru") {
-                if (entry.lastUsed < selectedEntry.lastUsed) {
+                if (getTimestamp(entry.lastUsed) < getTimestamp(selectedEntry.lastUsed)) {
                     selectedKey = key;
                     selectedEntry = entry;
                 }
             } else if (policy === "lfu") {
                 if (
                     entry.hits < selectedEntry.hits ||
-                    (entry.hits === selectedEntry.hits && entry.lastUsed < selectedEntry.lastUsed)
+                    (
+                        entry.hits === selectedEntry.hits &&
+                        getTimestamp(entry.lastUsed) < getTimestamp(selectedEntry.lastUsed)
+                    )
                 ) {
                     selectedKey = key;
                     selectedEntry = entry;
@@ -85,12 +90,13 @@ function memoize(fn, options = {}) {
         removeExpired();
 
         const key = resolver(...args);
-        const now = Date.now();
+        const now = getNow();
+        const nowTimestamp = now.getTime();
 
         if (cache.has(key)) {
             const entry = cache.get(key);
 
-            if (now - entry.time < ttl) {
+            if (nowTimestamp - getTimestamp(entry.time) < ttl) {
                 entry.lastUsed = now;
                 entry.hits += 1;
                 return entry.value;
