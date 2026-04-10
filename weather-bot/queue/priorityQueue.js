@@ -2,12 +2,19 @@ class PriorityQueue {
     constructor() {
         this.items = []
         this.id = 0
+        this.availableModes = ["highest", "lowest", "oldest", "newest"]
     }
 
     enqueue(item, priority = 0) {
+        let normalizedPriority = Number(priority)
+
+        if (Number.isNaN(normalizedPriority)) {
+            normalizedPriority = 0
+        }
+
         const obj = {
             item,
-            priority,
+            priority: normalizedPriority,
             id: this.id
         }
 
@@ -18,18 +25,18 @@ class PriorityQueue {
     }
 
     dequeue(mode = "highest") {
-        let index = this.getIndexByMode(mode)
+        const index = this.getIndexByMode(mode)
 
         if (index === -1) {
             return null
         }
 
-        let deleted = this.items.splice(index, 1)
+        const deleted = this.items.splice(index, 1)
         return deleted[0].item
     }
 
     peek(mode = "highest") {
-        let index = this.getIndexByMode(mode)
+        const index = this.getIndexByMode(mode)
 
         if (index === -1) {
             return null
@@ -43,11 +50,12 @@ class PriorityQueue {
     }
 
     isEmpty() {
-        return this.items.length == 0
+        return this.items.length === 0
     }
 
     clear() {
         this.items = []
+        this.id = 0
     }
 
     getIndexByMode(mode) {
@@ -55,36 +63,30 @@ class PriorityQueue {
             return -1
         }
 
-        if (!mode) {
+        if (!mode || !this.availableModes.includes(mode)) {
             mode = "highest"
         }
 
         let selectedIndex = 0
 
         for (let index = 1; index < this.items.length; index += 1) {
-            let a = this.items[index]
-            let b = this.items[selectedIndex]
+            const currentItem = this.items[index]
+            const selectedItem = this.items[selectedIndex]
 
             if (mode === "highest") {
-                if (a.priority >= b.priority) {
+                if (currentItem.priority > selectedItem.priority) {
                     selectedIndex = index
                 }
-            }
-
-            if (mode === "lowest") {
-                if (a.priority <= b.priority) {
+            } else if (mode === "lowest") {
+                if (currentItem.priority < selectedItem.priority) {
                     selectedIndex = index
                 }
-            }
-
-            if (mode === "oldest") {
-                if (a.id < b.id) {
+            } else if (mode === "oldest") {
+                if (currentItem.id < selectedItem.id) {
                     selectedIndex = index
                 }
-            }
-
-            if (mode === "newest") {
-                if (a.id > b.id) {
+            } else if (mode === "newest") {
+                if (currentItem.id > selectedItem.id) {
                     selectedIndex = index
                 }
             }
