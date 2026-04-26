@@ -1,53 +1,18 @@
-const SKIP = Symbol("skip");
+const SKIP = null;
 
-function abortError() {
-    const error = new Error("aborted");
-    error.name = "AbortError";
-    return error;
-}
-
-function asyncFilterMapCallback(array, callback, done, options = {}) {
-    const signal = options.signal;
+function asyncFilterMapCallback(array, callback, done) {
     const result = [];
     let i = 0;
-    let finished = false;
 
-    function end(error) {
-        if (finished) {
-            return;
-        }
-
-        finished = true;
-
-        if (signal) {
-            signal.removeEventListener("abort", onAbort);
-        }
-
-        done(error, result);
-    }
-
-    function onAbort() {
-        end(abortError());
-    }
-
-    function run() {
-        if (finished) {
-            return;
-        }
-
-        if (signal && signal.aborted) {
-            end(abortError());
-            return;
-        }
-
+    function processNext() {
         if (i >= array.length) {
-            end(null);
+            done(null, result);
             return;
         }
 
         callback(array[i], i, array, (error, value) => {
             if (error) {
-                end(error);
+                done(error, null);
                 return;
             }
 
@@ -56,53 +21,25 @@ function asyncFilterMapCallback(array, callback, done, options = {}) {
             }
 
             i += 1;
-            run();
+            processNext();
         });
     }
 
-    if (signal) {
-        signal.addEventListener("abort", onAbort, { once: true });
-    }
-
-    run();
+    processNext();
 }
 
-function asyncFilterMap(array, callback, options = {}) {
-    const signal = options.signal;
+async function asyncFilterMap(array, callback) {
+    const result = [];
 
-    return new Promise(async (resolve, reject) => {
-        const result = [];
+    for (let i = 0; i < array.length; i += 1) {
+        const value = await callback(array[i], i, array);
 
-        function onAbort() {
-            reject(abortError());
+        if (value !== SKIP) {
+            result.push(value);
         }
+    }
 
-        if (signal) {
-            signal.addEventListener("abort", onAbort, { once: true });
-        }
-
-        try {
-            for (let i = 0; i < array.length; i += 1) {
-                if (signal && signal.aborted) {
-                    throw abortError();
-                }
-
-                const value = await callback(array[i], i, array);
-
-                if (value !== SKIP) {
-                    result.push(value);
-                }
-            }
-
-            resolve(result);
-        } catch (error) {
-            reject(error);
-        } finally {
-            if (signal) {
-                signal.removeEventListener("abort", onAbort);
-            }
-        }
-    });
+    return result;
 }
 
 module.exports = {

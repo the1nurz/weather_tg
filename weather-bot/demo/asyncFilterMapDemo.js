@@ -75,30 +75,6 @@ async function demoAsyncAwaitVersion() {
 }
 
 async function demoAbortableVersion() {
-    const controller = new AbortController();
-    const signal = controller.signal;
-
-    const task = asyncFilterMap(
-        ["Kyiv", "Lviv", "Odesa", "Dnipro", "Kherson"],
-        async (city) => {
-            await wait(100);
-            return city.toLowerCase();
-        },
-        { signal }
-    );
-
-    setTimeout(() => {
-        controller.abort();
-    }, 250);
-
-    try {
-        await task;
-    } catch (error) {
-        console.log("Abortable version:", error.name, error.message);
-        return error;
-    }
-
-    throw new Error("Abort demo failed: operation should have been cancelled");
 }
 
 async function runDemo() {
