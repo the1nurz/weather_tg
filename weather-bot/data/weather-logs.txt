@@ -1,0 +1,10 @@
+Kyiv,19,clouds
+Lviv,14,rain
+Odesa,23,sun
+Dnipro,21,sun
+Kharkiv,18,clouds
+Poltava,20,wind
+Chernihiv,16,rain
+Vinnytsia,22,sun
+Ternopil,13,rain
+Uzhhorod,24,sun
