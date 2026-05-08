@@ -6,6 +6,7 @@
   "scripts": {
     "demo:async-filter-map": "node demo/asyncFilterMapDemo.js",
     "demo:large-data:stage1": "node demo/largeDataStage1Demo.js",
+    "demo:large-data:stage2": "node demo/largeDataStage2Demo.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
