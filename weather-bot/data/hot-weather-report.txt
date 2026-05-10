@@ -1,0 +1,5 @@
+Odesa; 23C; sun
+Dnipro; 21C; sun
+Poltava; 20C; wind
+Vinnytsia; 22C; sun
+Uzhhorod; 24C; sun
