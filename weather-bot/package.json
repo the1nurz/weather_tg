@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "demo:async-filter-map": "node demo/asyncFilterMapDemo.js",
+    "demo:event-bus": "node demo/eventBusDemo.js",
     "demo:large-data": "node demo/largeDataDemo.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
