@@ -1,35 +1,40 @@
 const { EventBus } = require("../events/eventBus");
+const {
+    HeatAlertService,
+    UserNotifier,
+    WEATHER_UPDATED,
+    WeatherLogger,
+    WeatherStation
+} = require("../events/weatherEntities");
 
 function runDemo() {
     const bus = new EventBus();
 
-    const notifyUser = (message) => {
-        console.log(`User notification: ${message.city} is ${message.temperature}C`);
-    };
+    const station = new WeatherStation(bus, "Kyiv Central Station");
+    const notifier = new UserNotifier(bus, "Olena");
+    const logger = new WeatherLogger(bus);
+    const heatAlertService = new HeatAlertService(bus, 25);
 
-    const logWeather = (message) => {
-        console.log(`Weather log: ${message.city} -> ${message.description}`);
-    };
+    notifier.start();
+    logger.start();
+    heatAlertService.start();
 
-    const unsubscribeUser = bus.subscribe("weather.updated", notifyUser);
-    bus.subscribe("weather.updated", logWeather);
+    console.log("Listeners before unsubscribe:", bus.listenerCount(WEATHER_UPDATED));
 
-    console.log("Listeners before unsubscribe:", bus.listenerCount("weather.updated"));
-
-    bus.publish("weather.updated", {
+    station.report({
         city: "Kyiv",
         temperature: 23,
         description: "clear sky"
     });
 
-    unsubscribeUser();
+    notifier.stop();
 
-    console.log("Listeners after unsubscribe:", bus.listenerCount("weather.updated"));
+    console.log("Listeners after unsubscribe:", bus.listenerCount(WEATHER_UPDATED));
 
-    bus.publish("weather.updated", {
+    station.report({
         city: "Lviv",
-        temperature: 18,
-        description: "light rain"
+        temperature: 28,
+        description: "hot afternoon"
     });
 }
 
