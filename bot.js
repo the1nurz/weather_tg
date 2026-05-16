@@ -6,16 +6,19 @@ const TelegramBot = require("node-telegram-bot-api");
 const memoize = require("./weather-bot/utils/memoize");
 const getWeather = require("./weather-bot/services/weatherService");
 const PriorityQueue = require("./weather-bot/queue/priorityQueue");
+const { EventBus } = require("./weather-bot/events/eventBus");
+const { WEATHER_UPDATED } = require("./weather-bot/events/weatherEntities");
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
 if (!token) {
-    throw new Error("TELEGRAM_BOT_TOKEN is not set");
+    throw new Error("TELEGRAM_BOT_TOKEN не встановлено");
 }
 
 const bot = new TelegramBot(token, { polling: true });
 const cachedWeather = memoize(getWeather, 1800000);
 const queue = new PriorityQueue();
+const eventBus = new EventBus();
 const usersFile = path.join(__dirname, "weather-bot", "users", "users.json");
 
 const dailyHour = 8;
@@ -26,7 +29,67 @@ function addToQueue(chatId, text, priority) {
         chatId: chatId,
         text: text
     }, priority || 0);
+
+    eventBus.publish("queue.message.added", {
+        chatId: chatId,
+        priority: priority || 0,
+        textLength: text.length
+    });
 }
+
+function registerBotEventListeners() {
+    const unsubscribeCommandLogger = eventBus.subscribe("bot.command.received", (message) => {
+        console.log(`Отримано команду: ${message.command} від чату ${message.chatId}`);
+    });
+
+    const unsubscribeQueueLogger = eventBus.subscribe("queue.message.added", (message) => {
+        console.log(`Повідомлення для чату ${message.chatId} додано в чергу з пріоритетом ${message.priority}`);
+    });
+
+    const unsubscribeWeatherLogger = eventBus.subscribe(WEATHER_UPDATED, (message) => {
+        console.log(`Подія погоди: ${message.city}, ${message.temperature}C, ${message.description}`);
+    });
+
+    const unsubscribeSubscriptionLogger = eventBus.subscribe("subscription.changed", (message) => {
+        const actionText = {
+            created: "створено",
+            updated: "оновлено",
+            deleted: "видалено"
+        }[message.action] || message.action;
+
+        console.log(`Підписку ${actionText} для чату ${message.chatId}`);
+    });
+
+    const unsubscribeHeatAlert = eventBus.subscribe(WEATHER_UPDATED, (message) => {
+        if (message.temperature < 30) {
+            return;
+        }
+
+        addToQueue(
+            message.chatId,
+            `Попередження про спеку для ${message.city}: ${message.temperature}°C. Пий воду і уникай прямого сонця.`,
+            8
+        );
+    });
+
+    return () => {
+        unsubscribeCommandLogger();
+        unsubscribeQueueLogger();
+        unsubscribeWeatherLogger();
+        unsubscribeSubscriptionLogger();
+        unsubscribeHeatAlert();
+    };
+}
+
+const stopBotEventListeners = registerBotEventListeners();
+
+function shutdown() {
+    stopBotEventListeners();
+    bot.stopPolling();
+}
+
+process.once("SIGINT", shutdown);
+process.once("SIGTERM", shutdown);
 
 function loadUsers() {
     try {
@@ -89,7 +152,7 @@ setInterval(async () => {
         try {
             await bot.sendMessage(message.chatId, message.text);
         } catch (error) {
-            console.log("send error");
+            console.log("Помилка надсилання повідомлення");
         }
     }
 }, 200);
@@ -115,6 +178,14 @@ setInterval(async () => {
             const weather = await cachedWeather(user.city);
             const text = makeDailyMessage(user.city, weather);
 
+            eventBus.publish(WEATHER_UPDATED, {
+                chatId: user.chatId,
+                city: user.city,
+                temperature: weather.temp,
+                description: weather.description,
+                source: "daily-subscription"
+            });
+
             addToQueue(user.chatId, text, 5);
             user.lastSentDate = today;
         } catch (error) {
@@ -126,6 +197,11 @@ setInterval(async () => {
 }, 60000);
 
 bot.onText(/\/start/, (msg) => {
+    eventBus.publish("bot.command.received", {
+        chatId: msg.chat.id,
+        command: "/start"
+    });
+
     addToQueue(
         msg.chat.id,
         "Привіт! Я погодний бот.\nНапиши /weather Київ, щоб отримати погоду.\nНапиши /subscribe Київ, щоб отримувати прогноз кожного дня о 08:00.",
@@ -136,8 +212,22 @@ bot.onText(/\/start/, (msg) => {
 bot.onText(/\/weather (.+)/, async (msg, match) => {
     const city = match[1].trim();
 
+    eventBus.publish("bot.command.received", {
+        chatId: msg.chat.id,
+        command: "/weather",
+        city: city
+    });
+
     try {
         const weather = await cachedWeather(city);
+
+        eventBus.publish(WEATHER_UPDATED, {
+            chatId: msg.chat.id,
+            city: city,
+            temperature: weather.temp,
+            description: weather.description,
+            source: "manual-request"
+        });
 
         addToQueue(
             msg.chat.id,
@@ -158,6 +248,12 @@ bot.onText(/\/subscribe (.+)/, (msg, match) => {
     const users = loadUsers();
     let userFound = false;
 
+    eventBus.publish("bot.command.received", {
+        chatId: msg.chat.id,
+        command: "/subscribe",
+        city: city
+    });
+
     for (let i = 0; i < users.length; i += 1) {
         if (users[i].chatId === msg.chat.id) {
             users[i].city = city;
@@ -175,12 +271,23 @@ bot.onText(/\/subscribe (.+)/, (msg, match) => {
     }
 
     saveUsers(users);
+    eventBus.publish("subscription.changed", {
+        action: userFound ? "updated" : "created",
+        chatId: msg.chat.id,
+        city: city
+    });
+
     addToQueue(msg.chat.id, `Готово! Тепер щодня о 08:00 надсилатиму прогноз для ${city}.`, 7);
 });
 
 bot.onText(/\/unsubscribe/, (msg) => {
     const users = loadUsers();
     const newUsers = [];
+
+    eventBus.publish("bot.command.received", {
+        chatId: msg.chat.id,
+        command: "/unsubscribe"
+    });
 
     for (let i = 0; i < users.length; i += 1) {
         if (users[i].chatId !== msg.chat.id) {
@@ -189,6 +296,11 @@ bot.onText(/\/unsubscribe/, (msg) => {
     }
 
     saveUsers(newUsers);
+    eventBus.publish("subscription.changed", {
+        action: "deleted",
+        chatId: msg.chat.id
+    });
+
     addToQueue(msg.chat.id, "Готово! Щоденну розсилку вимкнено.", 7);
 });
 
