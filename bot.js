@@ -106,7 +106,11 @@ function loadUsers() {
 }
 
 function saveUsers(users) {
-    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+    try {
+        fs.writeFileSync(usersFile, JSON.stringify(users, null, 2), "utf8");
+    } catch (error) {
+        console.log("Не вдалося зберегти користувачів");
+    }
 }
 
 function getToday() {
@@ -225,6 +229,19 @@ bot.onText(/\/start/, (msg) => {
     );
 });
 
+bot.onText(/^\/weather$/, (msg) => {
+    eventBus.publish("bot.command.received", {
+        chatId: msg.chat.id,
+        command: "/weather"
+    });
+
+    addToQueue(
+        msg.chat.id,
+        "Напиши місто після команди. Наприклад: /weather Київ",
+        7
+    );
+});
+
 bot.onText(/\/weather (.+)/, async (msg, match) => {
     const city = match[1].trim();
 
@@ -253,6 +270,19 @@ bot.onText(/\/weather (.+)/, async (msg, match) => {
             7
         );
     }
+});
+
+bot.onText(/^\/subscribe$/, (msg) => {
+    eventBus.publish("bot.command.received", {
+        chatId: msg.chat.id,
+        command: "/subscribe"
+    });
+
+    addToQueue(
+        msg.chat.id,
+        "Напиши місто для підписки. Наприклад: /subscribe Київ",
+        7
+    );
 });
 
 bot.onText(/\/subscribe (.+)/, (msg, match) => {

@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "node ../bot.js",
     "demo:async-filter-map": "node demo/asyncFilterMapDemo.js",
     "demo:event-bus": "node demo/eventBusDemo.js",
     "demo:large-data": "node demo/largeDataDemo.js",
