@@ -118,31 +118,47 @@ function getToday() {
     return `${year}-${month}-${day}`;
 }
 
-function makeDailyMessage(city, weather) {
-    let advice = "Одягайся по погоді.";
+function getClothingAdvice(weather) {
+    const isWarm = weather.minTemp >= 18;
+    const isDry = !weather.willRain && weather.rainChance < 40;
+    const isWindWeak = weather.windSpeed < 8;
 
-    if (weather.temp <= 0) {
-        advice = "Одягни теплу куртку, шапку і рукавички.";
-    } else if (weather.temp <= 10) {
-        advice = "Краще одягнути куртку або теплий светр.";
-    } else if (weather.temp <= 20) {
-        advice = "Підійде легка куртка або кофта.";
-    } else {
-        advice = "Можна одягнутися легко.";
+    if (isWarm && isDry && isWindWeak) {
+        return "Куртка або кофта не потрібні, можна одягнутися легко.";
     }
 
-    const description = weather.description.toLowerCase();
-    const isRain = description.includes("дощ") || description.includes("rain");
-    const rainText = isRain
-        ? "Схоже, буде дощ. Візьми парасольку."
-        : "Дощу в описі погоди немає.";
+    if (weather.minTemp <= 0) {
+        return "Одягни теплу куртку, шапку і рукавички.";
+    }
 
-    return `Добрий ранок!
-Прогноз на сьогодні для ${city}
-Температура: ${weather.temp}°C
+    if (weather.minTemp <= 10) {
+        return "Краще одягнути куртку або теплий светр.";
+    }
+
+    if (weather.minTemp <= 20) {
+        return "Підійде легка куртка або кофта.";
+    }
+
+    return "Можна одягнутися легко.";
+}
+
+function makeDailyMessage(city, weather) {
+    let rainText = "Дощу в прогнозі на день немає.";
+
+    if (weather.willRain) {
+        rainText = "У прогнозі є дощ. Візьми парасольку.";
+    } else if (weather.rainChance >= 40) {
+        rainText = `Є невелика ймовірність дощу: ${weather.rainChance}%. Парасолька за бажанням.`;
+    }
+
+    return `Прогноз на день для ${city}
+Середня температура: ${weather.temp}°C
+Мінімальна: ${weather.minTemp}°C
+Максимальна: ${weather.maxTemp}°C
+Вітер: ${weather.windSpeed} м/с
 Опис: ${weather.description}
 ${rainText}
-Порада: ${advice}`;
+Порада: ${getClothingAdvice(weather)}`;
 }
 
 setInterval(async () => {
@@ -176,12 +192,12 @@ setInterval(async () => {
 
         try {
             const weather = await cachedWeather(user.city);
-            const text = makeDailyMessage(user.city, weather);
+            const text = `Добрий ранок!\n${makeDailyMessage(user.city, weather)}`;
 
             eventBus.publish(WEATHER_UPDATED, {
                 chatId: user.chatId,
                 city: user.city,
-                temperature: weather.temp,
+                temperature: weather.maxTemp,
                 description: weather.description,
                 source: "daily-subscription"
             });
@@ -204,7 +220,7 @@ bot.onText(/\/start/, (msg) => {
 
     addToQueue(
         msg.chat.id,
-        "Привіт! Я погодний бот.\nНапиши /weather Київ, щоб отримати погоду.\nНапиши /subscribe Київ, щоб отримувати прогноз кожного дня о 08:00.",
+        "Привіт! Я погодний бот.\nНапиши /weather Київ, щоб отримати прогноз на день.\nНапиши /subscribe Київ, щоб отримувати прогноз кожного дня о 08:00.",
         1
     );
 });
@@ -224,20 +240,16 @@ bot.onText(/\/weather (.+)/, async (msg, match) => {
         eventBus.publish(WEATHER_UPDATED, {
             chatId: msg.chat.id,
             city: city,
-            temperature: weather.temp,
+            temperature: weather.maxTemp,
             description: weather.description,
             source: "manual-request"
         });
 
-        addToQueue(
-            msg.chat.id,
-            `Погода у ${city}\nТемпература: ${weather.temp}°C\nОпис: ${weather.description}`,
-            7
-        );
+        addToQueue(msg.chat.id, makeDailyMessage(city, weather), 7);
     } catch (error) {
         addToQueue(
             msg.chat.id,
-            `Не вдалося отримати погоду для "${city}". Перевір назву міста і спробуй ще раз.`,
+            `Не вдалося отримати прогноз для "${city}". Перевір назву міста і спробуй ще раз.`,
             7
         );
     }
@@ -277,7 +289,7 @@ bot.onText(/\/subscribe (.+)/, (msg, match) => {
         city: city
     });
 
-    addToQueue(msg.chat.id, `Готово! Тепер щодня о 08:00 надсилатиму прогноз для ${city}.`, 7);
+    addToQueue(msg.chat.id, `Готово! Тепер щодня о 08:00 надсилатиму прогноз на день для ${city}.`, 7);
 });
 
 bot.onText(/\/unsubscribe/, (msg) => {
