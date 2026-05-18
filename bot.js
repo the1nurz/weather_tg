@@ -122,47 +122,145 @@ function getToday() {
     return `${year}-${month}-${day}`;
 }
 
-function getClothingAdvice(weather) {
-    const isWarm = weather.minTemp >= 18;
-    const isDry = !weather.willRain && weather.rainChance < 40;
-    const isWindWeak = weather.windSpeed < 8;
-
-    if (isWarm && isDry && isWindWeak) {
-        return "Куртка або кофта не потрібні, можна одягнутися легко.";
+function getRainAdvice(weather) {
+    if (!weather.willRain && weather.rainChance < 20) {
+        return "☀️ Дощу не буде.";
     }
 
-    if (weather.minTemp <= 0) {
-        return "Одягни теплу куртку, шапку і рукавички.";
+    if (weather.rainChance >= 20 && weather.rainChance < 40) {
+        return `🌧️ Невелика ймовірність дощу (${weather.rainChance}%). Парасолька за бажанням.`;
     }
 
-    if (weather.minTemp <= 10) {
-        return "Краще одягнути куртку або теплий светр.";
+    if (weather.rainChance >= 40 && weather.rainChance < 70) {
+        return `⛈️ Дощ можливий (${weather.rainChance}% ймовірності). Краще взяти парасольку.`;
     }
 
-    if (weather.minTemp <= 20) {
-        return "Підійде легка куртка або кофта.";
-    }
-
-    return "Можна одягнутися легко.";
+    return `⛈️ Очікується дощ (${weather.rainChance}% ймовірності). Парасолька необхідна!`;
 }
 
-function makeDailyMessage(city, weather) {
-    let rainText = "Дощу в прогнозі на день немає.";
-
-    if (weather.willRain) {
-        rainText = "У прогнозі є дощ. Візьми парасольку.";
-    } else if (weather.rainChance >= 40) {
-        rainText = `Є невелика ймовірність дощу: ${weather.rainChance}%. Парасолька за бажанням.`;
+function getWindAdvice(weather) {
+    if (weather.windSpeed < 5) {
+        return "Вітер слабкий, комфортно.";
     }
 
-    return `Прогноз на день для ${city}
-Середня температура: ${weather.temp}°C
-Мінімальна: ${weather.minTemp}°C
-Максимальна: ${weather.maxTemp}°C
-Вітер: ${weather.windSpeed} м/с
-Опис: ${weather.description}
-${rainText}
-Порада: ${getClothingAdvice(weather)}`;
+    if (weather.windSpeed < 10) {
+        return `Помірний вітер ${weather.windSpeed} м/с. Майте на увазі при прогулянці.`;
+    }
+
+    if (weather.windSpeed < 15) {
+        return `Вітер ${weather.windSpeed} м/с. Сильний вітер — важко ходити. Захисті волосся.`;
+    }
+
+    return `Дуже сильний вітер ${weather.windSpeed} м/с! Ризик прогулювань на вулиці.`;
+}
+
+function getFeelsLikeAdvice(weather) {
+    const feelsLikeTemp = Math.round((weather.maxFeelsLike + weather.minFeelsLike) / 2);
+
+    if (feelsLikeTemp <= -20) {
+        return `Відчувається як ${feelsLikeTemp}°C — дуже холодно, довгих прогулянок уникати!`;
+    }
+
+    if (feelsLikeTemp <= -10) {
+        return `Відчувається як ${feelsLikeTemp}°C — холодно, обмежити час на вулиці.`;
+    }
+
+    if (feelsLikeTemp <= 0) {
+        return `Відчувається як ${feelsLikeTemp}°C через вітер і вологість.`;
+    }
+
+    return "";
+}
+
+function getClothingAdvice(weather) {
+    const realTemp = weather.minTemp;
+    const feelsLikeTemp = weather.minFeelsLike;
+    const isWet = weather.willRain || weather.rainChance >= 40;
+    const isWindy = weather.windSpeed >= 10;
+
+    if (realTemp >= 25) {
+        if (isWet) {
+            return "Легкий одяг, парасолька. Можна навіть футболку в дощ.";
+        }
+        return "Легкий одяг, сонцезахисні окуляри. Неймовірно комфортно!";
+    }
+
+    if (realTemp >= 18) {
+        if (isWindy && isWet) {
+            return "Легка куртка, парасолька. Закритий одяг бажаний.";
+        }
+        if (isWet) {
+            return "Легка куртка або светр + парасолька.";
+        }
+        return "Легка куртка або кофта. Комфортно гуляти.";
+    }
+
+    if (realTemp >= 10) {
+        if (isWindy && isWet) {
+            return "Теплий светр або демісезонна куртка + парасолька. Закрити шию та вуха.";
+        }
+        if (isWet) {
+            return "Демісезонна куртка + парасолька.";
+        }
+        if (isWindy) {
+            return "Теплий світер або легка куртка. Вітер — обмоти шию.";
+        }
+        return "Легка куртка або теплий светр.";
+    }
+
+    if (realTemp >= 0) {
+        if (isWet) {
+            return "Зимова куртка, парасолька. Рукавички розумні — дощ скуповує мокру снігову кашу.";
+        }
+        return "Зимова куртка, можна без шапки, але краще мати при собі.";
+    }
+
+    return "Теплий пуховик, шапка, рукавички обов'язково! Утеплюйтеся!";
+}
+
+
+function makeDailyMessage(city, weather) {
+    const rainAdvice = getRainAdvice(weather);
+    const windAdvice = getWindAdvice(weather);
+    const feelsLikeAdvice = getFeelsLikeAdvice(weather);
+    const clothingAdvice = getClothingAdvice(weather);
+
+    let message = `🌍 Прогноз для ${city}\n\n`;
+
+    message += `🌡️ ТЕМПЕРАТУРА\n`;
+    message += `Середня: ${weather.temp}°C\n`;
+    message += `Мінімальна: ${weather.minTemp}°C`;
+
+    if (weather.minFeelsLike < weather.minTemp) {
+        message += ` (відчувається ${weather.minFeelsLike}°C)`;
+    }
+
+    message += `\n`;
+    message += `Максимальна: ${weather.maxTemp}°C`;
+
+    if (weather.maxFeelsLike > weather.maxTemp) {
+        message += ` (відчувається ${weather.maxFeelsLike}°C)`;
+    }
+
+    message += `\n`;
+    if (feelsLikeAdvice) {
+        message += `⚠️ ${feelsLikeAdvice}\n`;
+    }
+    message += `\n`;
+
+    message += `💧 ВОЛОГІСТЬ ТА ДОЩ\n`;
+    message += `${rainAdvice}\n\n`;
+
+    message += `💨 ВІТЕР\n`;
+    message += `Макс швидкість: ${weather.windSpeed} м/с\n`;
+    message += `${windAdvice}\n\n`;
+
+    message += `📝 ОПИС\n${weather.description}\n\n`;
+
+    message += `👕 ЩО ОДЯГТИ\n`;
+    message += `${clothingAdvice}`;
+
+    return message;
 }
 
 setInterval(async () => {

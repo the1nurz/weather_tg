@@ -1,5 +1,14 @@
 const axios = require("axios");
 
+function calculateFeelsLike(temp, windSpeed) {
+    if (temp >= 10) {
+        return temp;
+    }
+
+    const windChill = 13.12 + 0.6215 * temp - 11.37 * Math.pow(windSpeed, 0.16) + 0.3965 * temp * Math.pow(windSpeed, 0.16);
+    return Math.round(windChill);
+}
+
 async function getWeather(city) {
     const apiKey = process.env.WEATHER_API_KEY;
 
@@ -14,10 +23,14 @@ async function getWeather(city) {
     let tempSum = 0;
     let minTemp = dayForecast[0].main.temp_min;
     let maxTemp = dayForecast[0].main.temp_max;
+    let minFeelsLike = 999;
+    let maxFeelsLike = -999;
     let willRain = false;
     let maxRainChance = 0;
     let maxWindSpeed = 0;
+    let rainCount = 0;
     const descriptions = {};
+    const weatherTypes = {};
 
     for (let i = 0; i < dayForecast.length; i += 1) {
         const item = dayForecast[i];
@@ -25,10 +38,15 @@ async function getWeather(city) {
         const description = item.weather[0].description;
         const main = item.weather[0].main.toLowerCase();
         const rainChance = item.pop || 0;
+        const windSpeed = item.wind.speed;
+
+        const feelsLike = calculateFeelsLike(temp, windSpeed);
 
         tempSum += temp;
         maxRainChance = Math.max(maxRainChance, rainChance);
-        maxWindSpeed = Math.max(maxWindSpeed, item.wind.speed);
+        maxWindSpeed = Math.max(maxWindSpeed, windSpeed);
+        minFeelsLike = Math.min(minFeelsLike, feelsLike);
+        maxFeelsLike = Math.max(maxFeelsLike, feelsLike);
 
         if (item.main.temp_min < minTemp) {
             minTemp = item.main.temp_min;
@@ -40,6 +58,7 @@ async function getWeather(city) {
 
         if (main === "rain" || main === "drizzle" || main === "thunderstorm") {
             willRain = true;
+            rainCount += 1;
         }
 
         if (!descriptions[description]) {
@@ -47,6 +66,11 @@ async function getWeather(city) {
         }
 
         descriptions[description] += 1;
+
+        if (!weatherTypes[main]) {
+            weatherTypes[main] = 0;
+        }
+        weatherTypes[main] += 1;
     }
 
     let mainDescription = dayForecast[0].weather[0].description;
@@ -65,10 +89,14 @@ async function getWeather(city) {
         temp: Math.round(averageTemp),
         minTemp: Math.round(minTemp),
         maxTemp: Math.round(maxTemp),
+        minFeelsLike: minFeelsLike,
+        maxFeelsLike: maxFeelsLike,
         description: mainDescription,
         willRain: willRain,
         rainChance: Math.round(maxRainChance * 100),
-        windSpeed: Math.round(maxWindSpeed)
+        rainCount: rainCount,
+        windSpeed: Math.round(maxWindSpeed),
+        weatherTypes: weatherTypes
     };
 }
 
