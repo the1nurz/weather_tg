@@ -1,68 +1,86 @@
 const axios = require("axios");
 
-function addAuthHeader(config, auth) {
-    const requestConfig = {
-        ...config,
-        headers: {
-            ...(config.headers || {})
-        }
-    };
-
-    if (auth.type === "apiKey") {
-        requestConfig.headers[auth.headerName || "x-api-key"] = auth.apiKey;
+function buildAuthHeaders(auth) {
+    if (!auth || !auth.type) {
+        return {};
     }
 
-    if (auth.type === "jwt") {
-        requestConfig.headers.Authorization = `Bearer ${auth.token}`;
+    switch (auth.type) {
+        case "apiKey":
+            return {
+                [auth.headerName || "x-api-key"]: auth.apiKey
+            };
+        case "jwt":
+            return {
+                Authorization: `Bearer ${auth.token || ""}`
+            };
+        case "oauth":
+            return {
+                Authorization: `Bearer ${auth.accessToken || ""}`
+            };
+        default:
+            return {};
     }
-
-    if (auth.type === "oauth") {
-        requestConfig.headers.Authorization = `Bearer ${auth.accessToken}`;
-    }
-
-    return requestConfig;
 }
 
-function createAuthProxy(options) {
-    let auth = options.auth;
+function addAuthHeader(config, auth) {
+    return {
+        ...config,
+        headers: {
+            ...(config.headers || {}),
+            ...buildAuthHeaders(auth)
+        }
+    };
+}
+
+function createAuthProxy(options = {}) {
+    let auth = options.auth || {};
     const sendRequest = options.sendRequest || axios;
     const logger = options.logger || console;
-    const rateLimitMs = options.rateLimitMs || 0;
+    const rateLimitMs = Number(options.rateLimitMs) || 0;
     let lastRequestTime = 0;
 
     async function waitForRateLimit() {
-        if (rateLimitMs === 0) {
+        if (rateLimitMs <= 0) {
             return;
         }
 
         const now = Date.now();
-        const timeFromLastRequest = now - lastRequestTime;
+        const elapsed = now - lastRequestTime;
 
-        if (timeFromLastRequest < rateLimitMs) {
-            await new Promise((resolve) => {
-                setTimeout(resolve, rateLimitMs - timeFromLastRequest);
-            });
+        if (elapsed < rateLimitMs) {
+            const delay = rateLimitMs - elapsed;
+            logger.log(`[AuthProxy] waiting ${delay}ms for rate limit`);
+            await new Promise((resolve) => setTimeout(resolve, delay));
         }
 
         lastRequestTime = Date.now();
     }
 
-    async function request(config) {
+    async function request(config = {}) {
         await waitForRateLimit();
 
-        let requestConfig = addAuthHeader(config, auth);
-        logger.log("Request:", requestConfig.method || "GET", requestConfig.url);
+        const requestConfig = addAuthHeader(config, auth);
+        logger.log("[AuthProxy] Request:", requestConfig.method || "GET", requestConfig.url, "auth=" + (auth.type || "none"));
+
+        if (typeof logger.debug === "function") {
+            logger.debug("[AuthProxy] headers:", requestConfig.headers);
+        }
 
         try {
-            return await sendRequest(requestConfig);
+            const response = await sendRequest(requestConfig);
+            logger.log("[AuthProxy] Response:", response.status || "unknown", requestConfig.url);
+            return response;
         } catch (error) {
             const status = error.response && error.response.status;
+            logger.log("[AuthProxy] Error:", status || error.message, requestConfig.url);
 
             if (status === 401 && typeof options.refreshToken === "function") {
-                logger.log("Token expired. Refreshing token...");
+                logger.log("[AuthProxy] token expired, attempting refresh...");
                 auth = await options.refreshToken(auth);
-                requestConfig = addAuthHeader(config, auth);
-                return sendRequest(requestConfig);
+                const retryConfig = addAuthHeader(config, auth);
+                logger.log("[AuthProxy] retrying request with refreshed credentials");
+                return sendRequest(retryConfig);
             }
 
             throw error;
@@ -73,13 +91,19 @@ function createAuthProxy(options) {
         auth = newAuth;
     }
 
+    function getAuth() {
+        return auth;
+    }
+
     return {
         request,
-        setAuth
+        setAuth,
+        getAuth
     };
 }
 
 module.exports = {
     addAuthHeader,
+    buildAuthHeaders,
     createAuthProxy
 };

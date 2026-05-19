@@ -1,18 +1,33 @@
 const { createAuthProxy } = require("../services/authProxy");
 
+let fakeServiceCallCount = 0;
+
 async function fakeApiService(config) {
+    fakeServiceCallCount += 1;
+    console.log("API service received url:", config.url);
     console.log("API service received headers:", config.headers);
+
+    if (config.url.includes("/protected") && config.headers.Authorization === "Bearer expired-token") {
+        const error = new Error("Unauthorized");
+        error.response = { status: 401 };
+        throw error;
+    }
 
     return {
         status: 200,
         data: {
-            message: "Request was accepted"
+            message: "Request accepted",
+            request: {
+                url: config.url,
+                method: config.method || "GET",
+                headers: config.headers
+            }
         }
     };
 }
 
 async function runApiKeyDemo() {
-    console.log("Basic authentication proxy");
+    console.log("Basic authentication proxy demo");
 
     const proxy = createAuthProxy({
         auth: {
@@ -20,7 +35,9 @@ async function runApiKeyDemo() {
             apiKey: "demo-api-key-123",
             headerName: "x-api-key"
         },
-        sendRequest: fakeApiService
+        sendRequest: fakeApiService,
+        rateLimitMs: 0,
+        logger: console
     });
 
     const response = await proxy.request({
@@ -32,7 +49,7 @@ async function runApiKeyDemo() {
 }
 
 async function runSwitchAuthDemo() {
-    console.log("\nSwitching authentication strategies");
+    console.log("\nSwitching authentication strategies demo");
 
     const proxy = createAuthProxy({
         auth: {
@@ -40,7 +57,8 @@ async function runSwitchAuthDemo() {
             token: "demo-jwt-token"
         },
         sendRequest: fakeApiService,
-        rateLimitMs: 500
+        rateLimitMs: 500,
+        logger: console
     });
 
     await proxy.request({
@@ -62,9 +80,38 @@ async function runSwitchAuthDemo() {
     });
 }
 
+async function runTokenRefreshDemo() {
+    console.log("\nToken refresh demo");
+
+    const proxy = createAuthProxy({
+        auth: {
+            type: "oauth",
+            accessToken: "expired-token"
+        },
+        sendRequest: fakeApiService,
+        rateLimitMs: 200,
+        logger: console,
+        refreshToken: async (currentAuth) => {
+            console.log("Refreshing token for auth type:", currentAuth.type);
+            return {
+                ...currentAuth,
+                accessToken: "new-token-456"
+            };
+        }
+    });
+
+    const response = await proxy.request({
+        method: "GET",
+        url: "https://api.example.com/protected/resource"
+    });
+
+    console.log("Response after refresh:", response.data);
+}
+
 async function runDemo() {
     await runApiKeyDemo();
     await runSwitchAuthDemo();
+    await runTokenRefreshDemo();
 }
 
 if (require.main === module) {
@@ -77,5 +124,6 @@ if (require.main === module) {
 module.exports = {
     runDemo,
     runApiKeyDemo,
-    runSwitchAuthDemo
+    runSwitchAuthDemo,
+    runTokenRefreshDemo
 };
